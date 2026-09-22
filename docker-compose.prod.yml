@@ -1,0 +1,72 @@
+# Продакшн-запуск на сервере: reverse-proxy Traefik + автоматический TLS.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Что подставить в .env перед запуском:
+#   APP_DOMAIN            домен сервиса, например radar.example.com
+#   TRAEFIK_NETWORK       внешняя docker-сеть, где живёт Traefik
+#   TRAEFIK_CERTRESOLVER  имя резолвера сертификатов в Traefik
+#   STACK_SUBNET          свободная подсеть для внутренней сети стека
+#
+# Почему порты наружу не публикуются: любой опубликованный порт Docker
+# становится доступен из интернета в обход firewall. Единственный публичный
+# вход — Traefik, который сам терминирует HTTPS.
+name: content-radar-ai
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-radar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-radar}
+    volumes:
+      - radar_db_data:/var/lib/postgresql/data
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-radar} -d ${POSTGRES_DB:-radar}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - internal
+
+  api:
+    build:
+      context: ./apps/api
+    restart: always
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-radar}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-radar}
+    depends_on:
+      db:
+        condition: service_healthy
+    # Две сети: внутренняя (база) и внешняя (Traefik и внешние LLM-endpoint'ы).
+    networks:
+      - internal
+      - edge
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.content-radar.entrypoints=websecure
+      - traefik.http.routers.content-radar.rule=Host(`${APP_DOMAIN:-radar.example.com}`)
+      - traefik.http.routers.content-radar.tls=true
+      - traefik.http.routers.content-radar.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.services.content-radar.loadbalancer.server.port=8000
+
+volumes:
+  radar_db_data:
+
+networks:
+  # Подсеть задаём явно: на серверах с большим числом проектов у Docker
+  # заканчиваются свободные адреса, и сеть без ipam просто не создаётся
+  # («all predefined address pools have been fully subnetted»).
+  internal:
+    ipam:
+      config:
+        - subnet: ${STACK_SUBNET:-10.247.0.0/24}
+  edge:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

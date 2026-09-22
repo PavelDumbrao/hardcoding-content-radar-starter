@@ -1,0 +1,53 @@
+# Локальный запуск: одна команда, никаких доменов и reverse-proxy.
+#
+#   cp .env.example .env
+#   docker compose up -d --build
+#   open http://localhost:8000
+#
+# Для сервера используй docker-compose.prod.yml (там Traefik и TLS).
+name: content-radar-ai
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-radar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-radar}
+    volumes:
+      - radar_db_data:/var/lib/postgresql/data
+      # Расширение pgvector включаем сразу: понадобится для семантического поиска.
+      - ./deploy/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-radar} -d ${POSTGRES_DB:-radar}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    # Порт наружу не публикуем: базе нечего делать в интернете.
+    # Для отладки раскомментируй строку ниже и подключайся к localhost:5433.
+    # ports:
+    #   - "127.0.0.1:5433:5432"
+    networks:
+      - internal
+
+  api:
+    build:
+      context: ./apps/api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-radar}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-radar}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Только локально: снаружи сервис не должен быть доступен без proxy.
+      - "127.0.0.1:8000:8000"
+    networks:
+      - internal
+
+volumes:
+  radar_db_data:
+
+networks:
+  internal:

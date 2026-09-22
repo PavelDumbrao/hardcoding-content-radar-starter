@@ -1,0 +1,10 @@
+# Версии зафиксированы по актуальным релизам на 2026-09-22.
+# openai sdk намеренно не пинится: его версию подбирает pydantic-ai.
+pydantic-ai==2.47.0
+fastapi==0.141.1
+uvicorn==0.53.0
+pydantic-settings==2.15.0
+sqlalchemy==2.0.54
+asyncpg==0.31.0
+pgvector==0.5.0
+httpx==0.28.1

@@ -1,0 +1,40 @@
+# Контекст-фильтр: в работу агента попадают только нужные файлы.
+
+# Зависимости и сборки
+node_modules/
+.next/
+dist/
+out/
+build/
+*.egg-info/
+.venv/
+venv/
+
+# Кэши
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.pyc
+
+# Секреты и локальные данные
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+data/
+tmp/
+
+# Массовые и бинарные артефакты
+*.mp4
+*.mp3
+*.wav
+*.zst
+*.tar.gz
+*.zip
+
+# Логи и дампы
+*.log
+*.sql.gz
+backups/
