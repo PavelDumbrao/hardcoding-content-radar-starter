@@ -142,33 +142,55 @@ def check_js_syntax() -> None:
 
 
 def check_compose() -> None:
+    """Проверяем валидность compose-файлов.
+
+    `docker compose config` требует, чтобы файл .env существовал (он указан
+    в env_file), а в репозитории его быть не должно. Поэтому на время проверки
+    временно создаём .env из .env.example и обязательно убираем его за собой.
+    """
     if shutil.which("docker") is None:
         notes.append("пропущено (docker не найден): проверка compose-файлов")
         return
+
+    env_file = ROOT / ".env"
+    example = ROOT / ".env.example"
+    created_env = False
+
+    if not env_file.exists() and example.exists():
+        env_file.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+        created_env = True
+
     env = {
         "POSTGRES_PASSWORD": "test-password",
         "APP_DOMAIN": "example.com",
         "TRAEFIK_NETWORK": "traefik",
         "STACK_SUBNET": "10.247.0.0/24",
     }
-    for name in ("docker-compose.yml", "docker-compose.prod.yml"):
-        path = ROOT / name
-        if not path.exists():
-            continue
-        try:
-            result = subprocess.run(
-                ["docker", "compose", "-f", str(path), "config", "-q"],
-                cwd=ROOT,
-                capture_output=True,
-                text=True,
-                timeout=120,
-                env={**os.environ, **env},
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired):
-            notes.append(f"пропущено (docker недоступен): {name}")
-            continue
-        if result.returncode != 0:
-            errors.append(f"{name} невалиден:\n{(result.stderr or result.stdout).strip()[:800]}")
+
+    try:
+        for name in ("docker-compose.yml", "docker-compose.prod.yml"):
+            path = ROOT / name
+            if not path.exists():
+                continue
+            try:
+                result = subprocess.run(
+                    ["docker", "compose", "-f", str(path), "config", "-q"],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                    env={**os.environ, **env},
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                notes.append(f"пропущено (docker недоступен): {name}")
+                continue
+            if result.returncode != 0:
+                errors.append(
+                    f"{name} невалиден:\n{(result.stderr or result.stdout).strip()[:800]}"
+                )
+    finally:
+        if created_env:
+            env_file.unlink(missing_ok=True)
 
 
 def main() -> None:
