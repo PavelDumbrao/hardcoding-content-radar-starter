@@ -147,6 +147,18 @@ select id, status, left(query, 50) from research_runs order by id desc limit 5;
 **Модель не вызывает инструменты.** Скорее всего она не поддерживает tool calling.
 Смени модель в `LLM_MODEL`.
 
+**`all predefined address pools have been fully subnetted`.** У Docker на этой машине
+закончились свободные диапазоны адресов (часто на серверах с кучей проектов).
+Открой `.env` и поставь свой свободный диапазон в `STACK_SUBNET`, например
+`10.248.0.0/24`, затем перезапусти:
+
+```bash
+docker compose down && docker compose up -d
+```
+
+**`Pool overlaps with other one`.** Выбранная подсеть уже занята другим проектом.
+Возьми другой диапазон в `STACK_SUBNET`.
+
 **Всё упало после правки.** Посмотри логи: `docker compose logs --tail 100 api`.
 Ошибка почти всегда описана человеческим текстом.
 

@@ -50,4 +50,12 @@ volumes:
   radar_db_data:
 
 networks:
+  # Подсеть задаём явно и с возможностью переопределить через .env.
+  # Причина: на машинах с большим числом проектов у Docker заканчиваются
+  # свободные адреса, и сеть без ipam не создаётся с ошибкой
+  # «all predefined address pools have been fully subnetted».
+  # Если увидишь «Pool overlaps with other one» — смени STACK_SUBNET на свободный.
   internal:
+    ipam:
+      config:
+        - subnet: ${STACK_SUBNET:-10.247.0.0/24}
